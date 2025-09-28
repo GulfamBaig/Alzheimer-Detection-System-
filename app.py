@@ -7,18 +7,14 @@ import cv2
 import gdown
 import os
 
-# ========================
-# Streamlit Page Config
-# ========================
+# Page Configuration
 st.set_page_config(
     page_title="Alzheimer Detection System",
     page_icon="🧠",
     layout="wide"
 )
 
-# ========================
-# Custom CSS
-# ========================
+# CSS styling
 st.markdown("""
 <style>
     .main-header {
@@ -52,16 +48,21 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ========================
-# Load Model from Google Drive
-# ========================
+# Load the trained model from Google Drive using gdown
 @st.cache_resource
 def load_model():
     model_path = "Alzheimer_Detection_model.h5"
     if not os.path.exists(model_path):
-        st.info("Downloading model from Google Drive... This may take a minute ⏳")
-        url = "https://drive.google.com/uc?id=1urOp_O6ocENaQEXkux4ylWgGW3C19cKE"  # Replace with your file id
-        gdown.download(url, model_path, quiet=False)
+        st.info("Downloading model from Google Drive... This might take a moment ⏳")
+        # File ID from your sharing link
+        file_id = "1urOp_O6ocENaQEXkux4ylWgGW3C19cKE"
+        url = f"https://drive.google.com/uc?id={file_id}"
+        try:
+            # Use fuzzy and cookies to deal with Google Drive link redirections
+            gdown.download(url=url, output=model_path, quiet=False, fuzzy=True, use_cookies=True)
+        except Exception as e:
+            st.error(f"Could not download the model: {e}")
+            return None
     try:
         model = keras.models.load_model(model_path)
         return model
@@ -69,55 +70,46 @@ def load_model():
         st.error(f"Error loading model: {e}")
         return None
 
-# ========================
-# Preprocess Image
-# ========================
+# Preprocess the uploaded image
 def preprocess_image(image):
-    image = image.resize((224, 224))  # resize to match model
+    image = image.resize((224, 224))
     img_array = np.array(image)
-    if img_array.shape[-1] == 3:  # convert RGB → BGR
+    if img_array.shape[-1] == 3:
         img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
     img_array = img_array.astype('float32')
     img_array = tf.keras.applications.efficientnet.preprocess_input(img_array)
     img_array = np.expand_dims(img_array, axis=0)
     return img_array
 
-# ========================
-# Class Names
-# ========================
+# Class names
 class_names = ['Mild Impairment', 'Moderate Impairment', 'No Impairment', 'Very Mild Impairment']
 
-# ========================
-# Streamlit App
-# ========================
+# Main app logic
 def main():
     st.markdown('<div class="main-header">🧠 Alzheimer Detection System</div>', unsafe_allow_html=True)
 
     # Sidebar
     st.sidebar.title("About")
     st.sidebar.info("""
-        This Alzheimer Detection System uses a deep learning model to analyze MRI brain scans 
-        and classify them into four categories:
-        - **No Impairment**  
-        - **Very Mild Impairment**  
-        - **Mild Impairment**  
-        - **Moderate Impairment**  
+    This Alzheimer Detection System uses a deep learning model to analyze MRI brain scans 
+    and classify them into four categories:
+    - **No Impairment**
+    - **Very Mild Impairment**
+    - **Mild Impairment**
+    - **Moderate Impairment**
     """)
-
     st.sidebar.title("Instructions")
     st.sidebar.markdown("""
-    1. Upload an MRI brain image (JPG/PNG)  
+    1. Upload an MRI brain image (JPG, PNG)  
     2. The image will be processed automatically  
-    3. View prediction & confidence levels  
-    4. Use clear MRI scans for best results  
+    3. View prediction & confidence level  
+    4. Use a clear MRI scan for best results  
     """)
 
     col1, col2 = st.columns([1, 1])
-
     with col1:
         st.subheader("Upload MRI Scan")
         uploaded_file = st.file_uploader("Choose an MRI brain scan image", type=['jpg', 'jpeg', 'png'])
-
         if uploaded_file is not None:
             image = Image.open(uploaded_file)
             st.image(image, caption="Uploaded MRI Scan", use_column_width=True)
@@ -133,7 +125,6 @@ def main():
 
                     with col2:
                         st.subheader("Analysis Results")
-
                         class_colors = {
                             'Mild Impairment': 'mild-impairment',
                             'Moderate Impairment': 'moderate-impairment',
@@ -145,36 +136,32 @@ def main():
                             f'<div class="prediction-box {class_colors[class_names[predicted_class]]}">'
                             f'<h3>Prediction: {class_names[predicted_class]}</h3>'
                             f'<h4>Confidence: {confidence*100:.2f}%</h4>'
-                            f'</div>', 
-                            unsafe_allow_html=True
+                            f'</div>', unsafe_allow_html=True
                         )
 
                         st.subheader("Detailed Confidence Scores")
-                        for i, (class_name, score) in enumerate(zip(class_names, confidence_scores)):
+                        for class_name, score in zip(class_names, confidence_scores):
                             percentage = score * 100
                             st.write(f"**{class_name}**: {percentage:.2f}%")
                             st.markdown(
                                 f'<div class="confidence-bar">'
                                 f'<div class="confidence-fill" style="width: {percentage}%"></div>'
-                                f'</div>', 
-                                unsafe_allow_html=True
+                                f'</div>', unsafe_allow_html=True
                             )
 
                         st.subheader("Interpretation")
                         interpretations = {
-                            'No Impairment': "Healthy brain with no significant Alzheimer's signs.",
-                            'Very Mild Impairment': "Early subtle changes may indicate beginning cognitive decline.",
-                            'Mild Impairment': "Moderate changes suggest mild cognitive impairment.",
-                            'Moderate Impairment': "Significant changes indicate moderate Alzheimer's disease. Consult a doctor."
+                            'No Impairment': "Healthy brain scan with no significant Alzheimer's indicators.",
+                            'Very Mild Impairment': "Early, subtle signs that may indicate the beginning of cognitive decline.",
+                            'Mild Impairment': "Moderate impairment observed. Monitoring recommended.",
+                            'Moderate Impairment': "Significant impairment. Consultation with medical professionals strongly advised."
                         }
                         st.info(interpretations[class_names[predicted_class]])
 
                         st.warning("""
-                        **Disclaimer**: This tool is for educational and research purposes only.  
-                        Not a substitute for professional medical diagnosis.  
-                        Always consult a healthcare professional.  
+                        **Disclaimer**: This tool is for educational / research purposes only.  
+                        Not for medical diagnosis. Please consult professionals for any medical concerns.
                         """)
-
     if uploaded_file is None:
         with col2:
             st.subheader("Sample MRI Scans")
@@ -187,10 +174,7 @@ def main():
                 st.markdown("**Supported Formats:**")
                 st.write("- JPG / JPEG")
                 st.write("- PNG")
-                st.write("- Clear MRI scans")
+                st.write("- High-quality MRI scans")
 
-# ========================
-# Run App
-# ========================
 if __name__ == "__main__":
     main()
